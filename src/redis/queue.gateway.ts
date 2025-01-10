@@ -106,13 +106,6 @@ export class QueueGateway
             const parsedMessage = JSON.parse(message);
             this.messageCount++;
 
-            // Log every 1000 messages
-            if (this.messageCount % 1000 === 0) {
-              this.logger.log(
-                `Consumer ${consumerId} processed ${this.messageCount} messages`,
-              );
-            }
-
             this.server.emit('queueMessage', parsedMessage);
           } catch (error) {
             this.logger.error(
