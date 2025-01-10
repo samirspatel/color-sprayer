@@ -10,4 +10,4 @@ import { RedisModule as NestRedisModule } from '@nestjs/redis';
   ],
   exports: [NestRedisModule],
 })
-export class RedisModule {} 
+export class RedisModule {}
