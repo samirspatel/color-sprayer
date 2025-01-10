@@ -11,10 +11,7 @@ export class AppController {
     private readonly producerService: ProducerService,
   ) {}
 
-  @Get()
-  async getHello(): Promise<string> {
-    return this.appService.getHello();
-  }
+
 
   @Get('queue')
   async getQueueStatus() {
