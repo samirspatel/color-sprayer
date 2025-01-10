@@ -66,6 +66,24 @@
         background-color: #dc3545;
         color: white;
       }
+
+      #pixelCanvas {
+        width: 100%;
+        min-height: 400px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        margin-top: 20px;
+        background-color: white;
+      }
+
+      .canvas-container {
+        max-height: 80vh;
+        overflow-y: auto;
+        margin-top: 20px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 6px;
+      }
     </style>
   </head>
   <body>
@@ -89,12 +107,47 @@
           <div class="stat-label">Messages in Queue</div>
         </div>
       </div>
+
+      <div class="canvas-container">
+        <canvas id="pixelCanvas"></canvas>
+      </div>
     </div>
 
     <script>
       const socket = io('http://localhost:3000');
       let messageCount = parseInt(localStorage.getItem('messageCount') || '0');
       let messagesLastSecond = 0;
+
+      // Canvas setup
+      const canvas = document.getElementById('pixelCanvas');
+      const ctx = canvas.getContext('2d');
+      let currentX = 0;
+      let currentY = 0;
+      const PIXEL_SIZE = 1;
+      const INITIAL_HEIGHT = 400;
+      const GROWTH_AMOUNT = 200; // Pixels to add when we need more space
+
+      // Set canvas size
+      function resizeCanvas(newHeight = null) {
+        const container = canvas.parentElement;
+        canvas.width = container.clientWidth - 20; // Account for padding
+
+        if (newHeight) {
+          canvas.height = newHeight;
+        } else {
+          canvas.height = INITIAL_HEIGHT;
+        }
+
+        // Preserve existing content if we're growing
+        if (!newHeight) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      // Initial canvas setup
+      resizeCanvas();
+      window.addEventListener('resize', () => resizeCanvas(canvas.height));
 
       // Initialize counters from localStorage
       document.getElementById('messageCount').textContent =
@@ -114,6 +167,54 @@
         return num.toLocaleString('en-US');
       }
 
+      // Draw a pixel with the given color
+      function drawPixel(color) {
+        // Check if we need to grow the canvas
+        if ((currentY + 1) * PIXEL_SIZE >= canvas.height) {
+          // Create a temporary canvas to store current content
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = canvas.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(canvas, 0, 0);
+
+          // Resize the main canvas
+          resizeCanvas(canvas.height + GROWTH_AMOUNT);
+
+          // Restore the previous content
+          ctx.drawImage(tempCanvas, 0, 0);
+
+          // Fill the new area with white
+          ctx.fillStyle = 'white';
+          ctx.fillRect(
+            0,
+            canvas.height - GROWTH_AMOUNT,
+            canvas.width,
+            GROWTH_AMOUNT,
+          );
+        }
+
+        // Draw the new pixel
+        ctx.fillStyle = color;
+        ctx.fillRect(
+          currentX * PIXEL_SIZE,
+          currentY * PIXEL_SIZE,
+          PIXEL_SIZE,
+          PIXEL_SIZE,
+        );
+
+        // Move to next position
+        currentX++;
+        if (currentX * PIXEL_SIZE >= canvas.width) {
+          currentX = 0;
+          currentY++;
+        }
+
+        // Scroll to bottom of container when new content is added
+        const container = canvas.parentElement;
+        container.scrollTop = container.scrollHeight;
+      }
+
       // Handle queue stats from WebSocket
       socket.on('queueStats', (stats) => {
         requestAnimationFrame(() => {
@@ -126,9 +227,11 @@
         });
       });
 
-      // Message handling (just count messages per second)
-      socket.on('queueMessage', () => {
+      // Message handling (draw pixel for each message)
+      socket.on('queueMessage', (message) => {
         messagesLastSecond++;
+        // console.log('Received message:', message); // Debug log
+        drawPixel(message.color);
       });
 
       // Update messages per second counter
