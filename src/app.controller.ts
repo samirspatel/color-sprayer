@@ -11,8 +11,6 @@ export class AppController {
     private readonly producerService: ProducerService,
   ) {}
 
-
-
   @Get('queue')
   async getQueueStatus() {
     const queueLength = await this.redisService.getQueueLength();
