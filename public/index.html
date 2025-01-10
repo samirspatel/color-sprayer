@@ -85,6 +85,36 @@
         border-radius: 6px;
       }
 
+      .color-canvases {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .color-canvas-container {
+        background: white;
+        padding: 15px;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .color-canvas-container h3 {
+        margin: 0 0 10px 0;
+        color: #2c3e50;
+        font-size: 1.1em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .color-canvas-container canvas {
+        width: 100%;
+        min-height: 200px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
       .color-stats {
         margin: 20px 0;
         width: 100%;
@@ -162,8 +192,8 @@
         </div>
       </div>
 
-      <div class="canvas-container">
-        <canvas id="pixelCanvas"></canvas>
+      <div id="colorCanvases" class="color-canvases">
+        <!-- Dynamic canvases will be inserted here -->
       </div>
     </div>
 
@@ -171,37 +201,9 @@
       const socket = io('http://localhost:3000');
       let messageCount = parseInt(localStorage.getItem('messageCount') || '0');
       let messagesLastSecond = 0;
-
-      // Canvas setup
-      const canvas = document.getElementById('pixelCanvas');
-      const ctx = canvas.getContext('2d');
-      let currentX = 0;
-      let currentY = 0;
       const PIXEL_SIZE = 2;
-      const INITIAL_HEIGHT = 400;
-      const GROWTH_AMOUNT = 200; // Pixels to add when we need more space
-
-      // Set canvas size
-      function resizeCanvas(newHeight = null) {
-        const container = canvas.parentElement;
-        canvas.width = container.clientWidth - 20; // Account for padding
-
-        if (newHeight) {
-          canvas.height = newHeight;
-        } else {
-          canvas.height = INITIAL_HEIGHT;
-        }
-
-        // Preserve existing content if we're growing
-        if (!newHeight) {
-          ctx.fillStyle = 'white';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-      }
-
-      // Initial canvas setup
-      resizeCanvas();
-      window.addEventListener('resize', () => resizeCanvas(canvas.height));
+      const INITIAL_HEIGHT = 200;
+      const GROWTH_AMOUNT = 200;
 
       // Initialize counters from localStorage
       document.getElementById('messageCount').textContent =
@@ -220,66 +222,6 @@
       function formatNumber(num) {
         return num.toLocaleString('en-US');
       }
-
-      // Draw a pixel with the given color
-      function drawPixel(color) {
-        // Check if we need to grow the canvas
-        if ((currentY + 1) * PIXEL_SIZE >= canvas.height) {
-          // Create a temporary canvas to store current content
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = canvas.width;
-          tempCanvas.height = canvas.height;
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx.drawImage(canvas, 0, 0);
-
-          // Resize the main canvas
-          resizeCanvas(canvas.height + GROWTH_AMOUNT);
-
-          // Restore the previous content
-          ctx.drawImage(tempCanvas, 0, 0);
-
-          // Fill the new area with white
-          ctx.fillStyle = 'white';
-          ctx.fillRect(
-            0,
-            canvas.height - GROWTH_AMOUNT,
-            canvas.width,
-            GROWTH_AMOUNT,
-          );
-        }
-
-        // Draw the new pixel
-        ctx.fillStyle = color;
-        ctx.fillRect(
-          currentX * PIXEL_SIZE,
-          currentY * PIXEL_SIZE,
-          PIXEL_SIZE,
-          PIXEL_SIZE,
-        );
-
-        // Move to next position
-        currentX++;
-        if (currentX * PIXEL_SIZE >= canvas.width) {
-          currentX = 0;
-          currentY++;
-        }
-
-        // Scroll to bottom of container when new content is added
-        const container = canvas.parentElement;
-        container.scrollTop = container.scrollHeight;
-      }
-
-      // Handle queue stats from WebSocket
-      socket.on('queueStats', (stats) => {
-        requestAnimationFrame(() => {
-          document.getElementById('queueLength').textContent = formatNumber(
-            stats.queueLength,
-          );
-          document.getElementById('messageCount').textContent = formatNumber(
-            stats.messageCount,
-          );
-        });
-      });
 
       // Track unique primary colors and their counts
       const primaryColorCounts = new Map();
@@ -328,6 +270,115 @@
         items.forEach((item) => container.appendChild(item));
       }
 
+      // Track canvases for each primary color
+      const colorCanvases = new Map();
+
+      // Get or create canvas for a primary color
+      function getColorCanvas(color) {
+        if (!colorCanvases.has(color)) {
+          // Create container
+          const container = document.createElement('div');
+          container.className = 'color-canvas-container';
+          container.id = `canvas-container-${color}`;
+
+          // Add header with color sample
+          const header = document.createElement('h3');
+          const colorSample = document.createElement('span');
+          colorSample.className = 'color-sample';
+          colorSample.style.background = color.toLowerCase();
+          header.appendChild(colorSample);
+          header.appendChild(document.createTextNode(color));
+          container.appendChild(header);
+
+          // Create canvas
+          const canvas = document.createElement('canvas');
+          canvas.id = `canvas-${color}`;
+          container.appendChild(canvas);
+
+          // Add to DOM
+          document.getElementById('colorCanvases').appendChild(container);
+
+          // Initialize canvas context and state
+          const ctx = canvas.getContext('2d');
+          colorCanvases.set(color, {
+            canvas,
+            ctx,
+            currentX: 0,
+            currentY: 0,
+          });
+
+          // Set initial size
+          resizeColorCanvas(color);
+        }
+        return colorCanvases.get(color);
+      }
+
+      // Resize specific color canvas
+      function resizeColorCanvas(color, newHeight = null) {
+        const { canvas, ctx } = colorCanvases.get(color);
+        const container = canvas.parentElement;
+        canvas.width = container.clientWidth - 2; // Account for border
+
+        if (newHeight) {
+          canvas.height = newHeight;
+        } else {
+          canvas.height = 200; // Initial height
+        }
+
+        // Fill with white if new canvas
+        if (!newHeight) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      // Draw pixel on specific color canvas
+      function drawPixelOnCanvas(color, pixelColor) {
+        const canvasData = getColorCanvas(color);
+        const { ctx, canvas } = canvasData;
+
+        // Check if we need to grow the canvas
+        if ((canvasData.currentY + 1) * PIXEL_SIZE >= canvas.height) {
+          // Create temp canvas to store current content
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = canvas.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(canvas, 0, 0);
+
+          // Resize canvas
+          resizeColorCanvas(color, canvas.height + GROWTH_AMOUNT);
+
+          // Restore content
+          ctx.drawImage(tempCanvas, 0, 0);
+
+          // Fill new area
+          ctx.fillStyle = 'white';
+          ctx.fillRect(
+            0,
+            canvas.height - GROWTH_AMOUNT,
+            canvas.width,
+            GROWTH_AMOUNT,
+          );
+        }
+
+        // Draw pixel
+        ctx.fillStyle = pixelColor;
+        ctx.fillRect(
+          canvasData.currentX * PIXEL_SIZE,
+          canvasData.currentY * PIXEL_SIZE,
+          PIXEL_SIZE,
+          PIXEL_SIZE,
+        );
+
+        // Update position
+        canvasData.currentX++;
+        if (canvasData.currentX * PIXEL_SIZE >= canvas.width) {
+          canvasData.currentX = 0;
+          canvasData.currentY++;
+        }
+      }
+
       // Message handling
       socket.on('queueMessage', (message) => {
         messagesLastSecond++;
@@ -335,9 +386,9 @@
         // Update primary color tracking
         if (message.primaryColor) {
           updatePrimaryColorList(message.primaryColor);
+          // Draw pixel on corresponding canvas
+          drawPixelOnCanvas(message.primaryColor, message.color);
         }
-
-        drawPixel(message.color);
       });
 
       // Update messages per second counter
