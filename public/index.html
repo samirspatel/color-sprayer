@@ -56,10 +56,10 @@
       }
 
       .message {
-        padding: 10px;
-        margin: 5px 0;
+        padding: 12px;
+        margin: 8px 0;
         background-color: #f8f9fa;
-        border-radius: 4px;
+        border-radius: 6px;
         border-left: 4px solid #007bff;
         animation: fadeIn 0.3s ease-in;
       }
@@ -68,12 +68,28 @@
         display: flex;
         justify-content: space-between;
         color: #666;
-        font-size: 0.9em;
-        margin-bottom: 5px;
+        font-size: 0.85em;
+        margin-bottom: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #eee;
       }
 
       .message-content {
         color: #2c3e50;
+        font-size: 1.1em;
+        font-weight: 500;
+        padding: 4px 0;
+      }
+
+      .message-id {
+        background: #e9ecef;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+      }
+
+      .message-timestamp {
+        color: #888;
       }
 
       .connection-status {
@@ -139,35 +155,125 @@
 
     <script>
       const socket = io('http://localhost:3000');
-      let messageCount = 0;
+      let messageCount = parseInt(localStorage.getItem('messageCount') || '0');
       let messagesLastSecond = 0;
-      let lastMessages = [];
+      let messageMap = new Map(); // Store messages by ID
+      let updatePending = false;
+
+      // Initialize counters from localStorage
+      document.getElementById('messageCount').textContent =
+        formatNumber(messageCount);
+
+      // Save counters to localStorage periodically
+      function saveToLocalStorage() {
+        localStorage.setItem('messageCount', messageCount.toString());
+      }
+
+      // Save every 5 seconds and before page unload
+      setInterval(saveToLocalStorage, 5000);
+      window.addEventListener('beforeunload', saveToLocalStorage);
+
+      // Throttle updates to prevent too frequent DOM manipulation
+      function throttle(func, limit) {
+        let inThrottle;
+        return function (...args) {
+          if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => (inThrottle = false), limit);
+          }
+        };
+      }
 
       // Helper function to format numbers with commas
       function formatNumber(num) {
         return num.toLocaleString('en-US');
       }
 
-      // Fetch queue stats every second
-      async function updateQueueStats() {
-        try {
-          const response = await fetch('/queue');
-          const stats = await response.json();
+      // Helper function to update message list display
+      function updateMessageList() {
+        if (updatePending) return;
+        updatePending = true;
+
+        // Use requestAnimationFrame for smooth updates
+        requestAnimationFrame(() => {
+          const messageList = document.getElementById('messageList');
+          const oldHeight = messageList.scrollHeight;
+          const wasAtBottom =
+            messageList.scrollTop + messageList.clientHeight >= oldHeight - 10;
+
+          // Get last 10 messages sorted by ID in descending order
+          const messages = Array.from(messageMap.values())
+            .sort((a, b) => b.id - a.id)
+            .slice(0, 10);
+
+          const fragment = document.createDocumentFragment();
+          messages.forEach((message) => {
+            const messageElement = createMessageElement(message);
+            fragment.appendChild(messageElement);
+          });
+
+          // Clear and update in one batch
+          messageList.innerHTML = '';
+          messageList.appendChild(fragment);
+
+          // Maintain scroll position if was at bottom
+          if (wasAtBottom) {
+            messageList.scrollTop = messageList.scrollHeight;
+          }
+
+          updatePending = false;
+        });
+      }
+
+      // Throttled version of updateMessageList
+      const throttledUpdate = throttle(updateMessageList, 100);
+
+      // Handle queue stats from WebSocket
+      socket.on('queueStats', (stats) => {
+        requestAnimationFrame(() => {
           document.getElementById('queueLength').textContent = formatNumber(
             stats.queueLength,
           );
-          document.getElementById('producedCount').textContent = formatNumber(
-            stats.producedCount,
+          document.getElementById('messageCount').textContent = formatNumber(
+            stats.messageCount,
           );
-        } catch (error) {
-          console.error('Error fetching queue stats:', error);
-        }
-      }
 
-      // Update queue stats every second
-      setInterval(updateQueueStats, 1000);
-      // Initial stats update
-      updateQueueStats();
+          // Update message map with recent messages
+          stats.recentMessages.forEach((message) => {
+            messageMap.set(message.id, message);
+          });
+          throttledUpdate();
+        });
+      });
+
+      // Message handling
+      socket.on('queueMessage', (message) => {
+        messagesLastSecond++;
+
+        // Update message in map
+        messageMap.set(message.id, message);
+
+        // Cleanup old messages
+        if (messageMap.size > 20) {
+          const ids = Array.from(messageMap.keys()).sort((a, b) => b - a);
+          ids.slice(20).forEach((id) => messageMap.delete(id));
+        }
+
+        throttledUpdate();
+      });
+
+      // Update messages per second counter with throttling
+      setInterval(
+        throttle(() => {
+          requestAnimationFrame(() => {
+            document.getElementById('messagesPerSecond').textContent =
+              formatNumber(messagesLastSecond);
+            messagesLastSecond = 0;
+          });
+        }, 1000),
+        1000,
+      );
 
       // Connection status handling
       socket.on('connect', () => {
@@ -189,36 +295,20 @@
           .classList.add('disconnected');
       });
 
-      // Message handling
-      socket.on('queueMessage', (message) => {
-        messageCount++;
-        messagesLastSecond++;
-        document.getElementById('messageCount').textContent =
-          formatNumber(messageCount);
-
-        const messageElement = createMessageElement(message);
-        const messageList = document.getElementById('messageList');
-        messageList.insertBefore(messageElement, messageList.firstChild);
-
-        // Keep only last 100 messages to prevent browser from getting too slow
-        lastMessages.unshift(message);
-        if (lastMessages.length > 100) {
-          lastMessages.pop();
-          messageList.lastChild?.remove();
-        }
-      });
-
       function createMessageElement(message) {
         const div = document.createElement('div');
         div.className = 'message';
+        div.id = `message-${message.id}`;
 
         const header = document.createElement('div');
         header.className = 'message-header';
 
         const id = document.createElement('span');
-        id.textContent = `#${message.id}`;
+        id.className = 'message-id';
+        id.textContent = `#${formatNumber(message.id)}`;
 
         const timestamp = document.createElement('span');
+        timestamp.className = 'message-timestamp';
         timestamp.textContent = new Date(
           message.timestamp,
         ).toLocaleTimeString();
@@ -228,20 +318,13 @@
 
         const content = document.createElement('div');
         content.className = 'message-content';
-        content.textContent = message.data;
+        content.textContent = `${message.data}`;
 
         div.appendChild(header);
         div.appendChild(content);
 
         return div;
       }
-
-      // Update messages per second counter
-      setInterval(() => {
-        document.getElementById('messagesPerSecond').textContent =
-          formatNumber(messagesLastSecond);
-        messagesLastSecond = 0;
-      }, 1000);
     </script>
   </body>
 </html>
