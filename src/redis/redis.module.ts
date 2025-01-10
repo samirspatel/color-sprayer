@@ -1,13 +1,9 @@
 import { Module } from '@nestjs/common';
-import { RedisModule as NestRedisModule } from '@nestjs/redis';
+import { RedisService } from './redis.service';
 
 @Module({
-  imports: [
-    NestRedisModule.forRoot({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT) || 6379,
-    }),
-  ],
-  exports: [NestRedisModule],
+  imports: [],
+  providers: [RedisService],
+  exports: [RedisService],
 })
 export class RedisModule {}

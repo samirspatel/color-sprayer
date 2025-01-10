@@ -1,19 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRedis } from '@nestjs/redis';
-import { Redis } from 'ioredis';
+import { RedisService } from './redis/redis.service';
 
 @Injectable()
 export class AppService {
-  constructor(@InjectRedis() private readonly redis: Redis) {}
+  constructor(private readonly redisService: RedisService) {}
 
   async getHello(): Promise<string> {
-    const cachedValue = await this.redis.get('hello');
-    if (cachedValue) {
-      return cachedValue;
+    const cached = await this.redisService.get('greeting');
+    if (cached) {
+      return cached;
     }
 
-    const value = 'Hello World!';
-    await this.redis.set('hello', value, 'EX', 60); // Cache for 60 seconds
-    return value;
+    const greeting = 'Hello World!';
+    await this.redisService.set('greeting', greeting, 60); // Cache for 60 seconds
+    return greeting;
   }
 }
