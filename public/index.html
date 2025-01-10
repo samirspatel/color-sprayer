@@ -391,6 +391,18 @@
         }
       });
 
+      // Handle queue stats from WebSocket
+      socket.on('queueStats', (stats) => {
+        requestAnimationFrame(() => {
+          document.getElementById('queueLength').textContent = formatNumber(
+            stats.queueLength,
+          );
+          document.getElementById('messageCount').textContent = formatNumber(
+            stats.messageCount,
+          );
+        });
+      });
+
       // Update messages per second counter
       setInterval(() => {
         requestAnimationFrame(() => {
