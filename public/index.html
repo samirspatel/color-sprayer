@@ -124,6 +124,14 @@
           <div id="messagesPerSecond" class="stat-value">0</div>
           <div class="stat-label">Messages/Second</div>
         </div>
+        <div class="stat-card">
+          <div id="queueLength" class="stat-value">0</div>
+          <div class="stat-label">Messages in Queue</div>
+        </div>
+        <div class="stat-card">
+          <div id="producedCount" class="stat-value">0</div>
+          <div class="stat-label">Total Messages Produced</div>
+        </div>
       </div>
 
       <div id="messageList"></div>
@@ -134,6 +142,25 @@
       let messageCount = 0;
       let messagesLastSecond = 0;
       let lastMessages = [];
+
+      // Fetch queue stats every second
+      async function updateQueueStats() {
+        try {
+          const response = await fetch('/queue');
+          const stats = await response.json();
+          document.getElementById('queueLength').textContent =
+            stats.queueLength;
+          document.getElementById('producedCount').textContent =
+            stats.producedCount;
+        } catch (error) {
+          console.error('Error fetching queue stats:', error);
+        }
+      }
+
+      // Update queue stats every second
+      setInterval(updateQueueStats, 1000);
+      // Initial stats update
+      updateQueueStats();
 
       // Connection status handling
       socket.on('connect', () => {
