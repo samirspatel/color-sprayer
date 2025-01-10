@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Queue Monitor</title>
+    <title>Color Sprayer</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
       body {
@@ -84,6 +84,53 @@
         background: #f8f9fa;
         border-radius: 6px;
       }
+
+      .color-stats {
+        margin: 20px 0;
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .primary-colors-list {
+        margin: 20px 0;
+        padding: 15px;
+        background: white;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .primary-colors-list h2 {
+        margin: 0 0 15px 0;
+        color: #2c3e50;
+        font-size: 1.2em;
+      }
+
+      .color-items {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+      }
+
+      .color-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        font-weight: 500;
+      }
+
+      .color-item .count {
+        margin-left: auto;
+        background: #e9ecef;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.9em;
+      }
     </style>
   </head>
   <body>
@@ -108,6 +155,13 @@
         </div>
       </div>
 
+      <div class="primary-colors-list">
+        <h2>Unique Primary Colors</h2>
+        <div id="colorItems" class="color-items">
+          <!-- Dynamic color items will be inserted here -->
+        </div>
+      </div>
+
       <div class="canvas-container">
         <canvas id="pixelCanvas"></canvas>
       </div>
@@ -123,7 +177,7 @@
       const ctx = canvas.getContext('2d');
       let currentX = 0;
       let currentY = 0;
-      const PIXEL_SIZE = 1;
+      const PIXEL_SIZE = 2;
       const INITIAL_HEIGHT = 400;
       const GROWTH_AMOUNT = 200; // Pixels to add when we need more space
 
@@ -227,10 +281,62 @@
         });
       });
 
-      // Message handling (draw pixel for each message)
+      // Track unique primary colors and their counts
+      const primaryColorCounts = new Map();
+
+      // Update primary color list
+      function updatePrimaryColorList(color) {
+        if (!color) return;
+
+        // Update or initialize count
+        const currentCount = primaryColorCounts.get(color) || 0;
+        primaryColorCounts.set(color, currentCount + 1);
+
+        // Get or create element for this color
+        let colorElement = document.getElementById(`color-${color}`);
+        if (!colorElement) {
+          colorElement = document.createElement('div');
+          colorElement.id = `color-${color}`;
+          colorElement.className = 'color-item';
+          colorElement.innerHTML = `
+            <span class="color-sample" style="background: ${color.toLowerCase()}"></span>
+            <span class="name">${color}</span>
+            <span class="count">${formatNumber(1)}</span>
+          `;
+          document.getElementById('colorItems').appendChild(colorElement);
+        } else {
+          // Update existing element
+          colorElement.querySelector('.count').textContent = formatNumber(
+            primaryColorCounts.get(color),
+          );
+        }
+
+        // Sort elements by count (highest first)
+        const container = document.getElementById('colorItems');
+        const items = Array.from(container.children);
+        items.sort((a, b) => {
+          const countA = primaryColorCounts.get(
+            a.querySelector('.name').textContent,
+          );
+          const countB = primaryColorCounts.get(
+            b.querySelector('.name').textContent,
+          );
+          return countB - countA;
+        });
+
+        // Reorder elements
+        items.forEach((item) => container.appendChild(item));
+      }
+
+      // Message handling
       socket.on('queueMessage', (message) => {
         messagesLastSecond++;
-        // console.log('Received message:', message); // Debug log
+
+        // Update primary color tracking
+        if (message.primaryColor) {
+          updatePrimaryColorList(message.primaryColor);
+        }
+
         drawPixel(message.color);
       });
 
