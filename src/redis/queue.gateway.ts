@@ -20,8 +20,9 @@ export class QueueGateway
 {
   @WebSocketServer() server: Server;
   private logger = new Logger('QueueGateway');
-  private stopConsumer: (() => void) | null = null;
+  private stopConsumers: (() => void)[] = [];
   private connectedClients = 0;
+  private readonly NUM_CONSUMERS = 2; // Number of parallel consumers
 
   constructor(private readonly redisService: RedisService) {}
 
@@ -52,24 +53,27 @@ export class QueueGateway
   }
 
   private async startConsuming() {
-    this.logger.log('Starting message consumption');
-    this.stopConsumer = await this.redisService.startConsumer(
-      async (message) => {
-        const parsedMessage = JSON.parse(message);
-        this.server.emit('queueMessage', parsedMessage);
-      },
-      {
-        pollInterval: 0,
-        stopOnError: false,
-      },
-    );
+    this.logger.log(`Starting ${this.NUM_CONSUMERS} message consumers`);
+
+    // Start multiple consumers in parallel
+    for (let i = 0; i < this.NUM_CONSUMERS; i++) {
+      const stopConsumer = await this.redisService.startConsumer(
+        async (message) => {
+          const parsedMessage = JSON.parse(message);
+          this.server.emit('queueMessage', parsedMessage);
+        },
+        {
+          pollInterval: 0,
+          stopOnError: false,
+        },
+      );
+      this.stopConsumers.push(stopConsumer);
+    }
   }
 
   private stopConsuming() {
-    if (this.stopConsumer) {
-      this.logger.log('Stopping message consumption');
-      this.stopConsumer();
-      this.stopConsumer = null;
-    }
+    this.logger.log('Stopping all message consumers');
+    this.stopConsumers.forEach((stop) => stop());
+    this.stopConsumers = [];
   }
 }

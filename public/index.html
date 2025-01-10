@@ -143,15 +143,22 @@
       let messagesLastSecond = 0;
       let lastMessages = [];
 
+      // Helper function to format numbers with commas
+      function formatNumber(num) {
+        return num.toLocaleString('en-US');
+      }
+
       // Fetch queue stats every second
       async function updateQueueStats() {
         try {
           const response = await fetch('/queue');
           const stats = await response.json();
-          document.getElementById('queueLength').textContent =
-            stats.queueLength;
-          document.getElementById('producedCount').textContent =
-            stats.producedCount;
+          document.getElementById('queueLength').textContent = formatNumber(
+            stats.queueLength,
+          );
+          document.getElementById('producedCount').textContent = formatNumber(
+            stats.producedCount,
+          );
         } catch (error) {
           console.error('Error fetching queue stats:', error);
         }
@@ -186,7 +193,8 @@
       socket.on('queueMessage', (message) => {
         messageCount++;
         messagesLastSecond++;
-        document.getElementById('messageCount').textContent = messageCount;
+        document.getElementById('messageCount').textContent =
+          formatNumber(messageCount);
 
         const messageElement = createMessageElement(message);
         const messageList = document.getElementById('messageList');
@@ -231,7 +239,7 @@
       // Update messages per second counter
       setInterval(() => {
         document.getElementById('messagesPerSecond').textContent =
-          messagesLastSecond;
+          formatNumber(messagesLastSecond);
         messagesLastSecond = 0;
       }, 1000);
     </script>
