@@ -1,18 +1,16 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
 import { RedisService } from './redis/redis.service';
 import { ProducerService } from './redis/producer.service';
 
 @Controller()
 export class AppController {
   constructor(
-    private readonly appService: AppService,
     private readonly redisService: RedisService,
     private readonly producerService: ProducerService,
   ) {}
 
-  @Get('queue')
-  async getQueueStatus() {
+  @Get('stats')
+  async getQueueStats() {
     const queueLength = await this.redisService.getQueueLength();
     const producedCount = this.producerService.getMessageCount();
     const recentMessages = await this.redisService.peekQueue(0, 5); // Get last 5 messages for preview
